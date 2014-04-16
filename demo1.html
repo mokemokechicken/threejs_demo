@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head><meta charset="UTF-8"></head>
+  <body>
+    <script src="three.min.js"></script>
+ 
+    <!-- (1) 頂点シェーダー -->
+    <script type="x-shader/x-vertex" id="vshader">
+      uniform float time;
+      uniform float size;
+ 
+      attribute float lifetime;
+      attribute float shift;
+ 
+      varying float alpha;
+ 
+      void main() {
+        float t = fract(time / lifetime + shift);
+        float c = pow(t, 1.7) * 10.0;
+        float s = ceil(c);
+        float y = (1.0 - pow((s-c) * 2.0 - 1.0, 2.0)) / (s * s);
+ 
+        alpha = 1.0 - smoothstep(0.8, 1.0, t);
+ 
+        vec3 p = position * vec3(t, y, t);
+        vec4 mvPosition = modelViewMatrix * vec4(p, 1.0);
+        gl_PointSize = (size * (256.0 / length( mvPosition.xyz)) *
+          (1.0 + smoothstep(0.8, 1.0, t) * 6.0));
+        gl_Position = projectionMatrix * mvPosition;
+      }
+    </script>
+ 
+    <!-- (1) フラグメントシェーダー -->
+    <script type="x-shader/x-fragment" id="fshader">
+      uniform vec3      color;
+      uniform sampler2D texture;
+ 
+      varying float alpha;
+ 
+      void main() {
+        gl_FragColor = texture2D(texture, gl_PointCoord) * vec4(color, alpha) * 0.9;
+      }
+    </script>
+ 
+    <script>
+      // レンダラの初期化
+      var renderer = new THREE.WebGLRenderer({ antialias:true });
+      renderer.setSize(500, 500);
+      renderer.setClearColorHex(0x000000, 1);
+      document.body.appendChild(renderer.domElement);
+ 
+      var scene = new THREE.Scene();
+ 
+      // カメラの作成
+      var camera = new THREE.PerspectiveCamera(70, 500 / 500);
+      camera.position = new THREE.Vector3(0, 8, 12);
+      camera.lookAt(new THREE.Vector3(-1, 0, 4));
+      scene.add(camera);
+ 
+      // (2) マテリアルの作成
+      var texture  = THREE.ImageUtils.loadTexture('images/particle.png');
+      var material = new THREE.ShaderMaterial({
+        vertexShader: document.getElementById('vshader').textContent,
+        fragmentShader: document.getElementById('fshader').textContent,
+        uniforms: {
+          time: { type: 'f', value: 0 },
+          size: { type: 'f', value: 0.13 },
+          color: { type: 'c', value: new THREE.Color(0xffcc88) },
+          texture: { type: 't', value: texture }
+        },
+        attributes: {
+          lifetime: { type:'f',  value: [] },
+          shift: { type:'f',  value: [] }
+        },
+ 
+        // 通常マテリアルのパラメータ
+        blending: THREE.AdditiveBlending, transparent: true, depthTest: false
+      });
+ 
+      // (3) 形状データを作成（同時に追加の頂点情報を初期化）
+      var geometry   = new THREE.Geometry();
+      var attributes = material.attributes;
+      var numParticles = 100000;
+      for(var i = 0 ; i < numParticles ; i++) {
+        var a = Math.PI * 2 * Math.random();
+        var d = 8 + Math.random() * 8;
+        geometry.vertices.push(new THREE.Vector3(
+          Math.sin(a)*d, 3 + Math.random() * 2, Math.cos(a)*d));
+ 
+        // 追加の頂点情報を初期化
+        attributes.lifetime.value.push(3 + Math.random());
+        attributes.shift.value.push(Math.random());
+      }
+ 
+      // 物体を作成
+      var mesh = new THREE.ParticleSystem(geometry, material);
+      mesh.position = new THREE.Vector3(0, 0, 0);
+      mesh.sortParticles = false;
+      scene.add(mesh);
+ 
+      // (4) レンダリング
+      var baseTime = +new Date;
+      function render() {
+        requestAnimationFrame(render);
+        material.uniforms.time.value = (+new Date - baseTime) / 1000;
+        renderer.render(scene, camera);
+      };
+      render();
+    </script>
+  </body>
+</html>
